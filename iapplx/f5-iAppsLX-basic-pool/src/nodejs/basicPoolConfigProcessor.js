@@ -25,7 +25,7 @@ var logger = require('f5-logger').getInstance();
 
 var constants = require('./constants');
 
-var nacosTools = require('./nacosTools')
+var { getAllServiceName, getServiceInfo } = require('./nacosTools')
 
 /**
  * A basic config processor for managing LTM pools.
@@ -93,13 +93,22 @@ BasicPoolConfigProcessor.prototype.onPost = function (restOperation) {
     var uri = this.restHelper.buildUri({
         protocol: this.wellKnownPorts.DEFAULT_HTTP_SCHEME,
         port: this.wellKnownPorts.DEFAULT_JAVA_SERVER_PORT,
-        hostname : "localhost"
+        hostname: "localhost"
     });
 
-    // 取所有的serviceName
-    const allServiceNames = await nacosTools.getAllServiceName()
-    // 再通过serviceName获取每个serviceName所有节点的ip和端口
-    // const serviceInfo = await nacosTools.getServiceInfo(serviceName)
+    getAllServiceName().then(function (serviceNames) {
+        return serviceNames.map(function (name) {
+            return getServiceInfo(name)
+        })
+    }).then(function (arr) {
+        return Q.all(arr)
+    }).then(serviceInfos => {
+        console.log(serviceInfos)
+        // serviceInfos {ip: string, port: number}[]
+        // 获取到节点内容之后如果是作为icr.configureRemoteDeviceRequests的参数 
+        // 则需要把下代码放到这个then链里面
+        
+    })
 
     // In case user requested configuration to deployed to remote
     // device, setup remote hostname, HTTPS port and device group name
@@ -108,40 +117,40 @@ BasicPoolConfigProcessor.prototype.onPost = function (restOperation) {
         // Start by upserting the pool, by name (insert or verify it exists)
         return icr.getExistingPool(restOperation, inputProperties.poolName.value);
     })
-    .then(function () {
-        logger.fine("BASIC: Add Found a pre-existing pool. Set pool type: " + inputProperties.poolType.value);
-        return icr.setPoolType(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
-    }, function (error) {
-        logger.fine("BASIC: Add GET of pool failed, adding from scratch, including pool-type");
-        return icr.createNewPool(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
-    })
-    .then(function() {
-        // Get existing pool members
-        return icr.getPoolMembers(restOperation, inputProperties.poolName.value);
-    })
-    .then(function (response) {
-        // Delete the existing members (decode from response.body.items list)
-        return icr.deletePoolMembers(restOperation, inputProperties.poolName.value, response.body.items);
-    })
-    .then(function () {
-        // Add all required members
-        return icr.addPoolMembers(restOperation, inputProperties.poolName.value, inputProperties.poolMembers.value);
-    })
-    // Final then() to handle setting the block state to BOUND
-   .then(function () {
-        configTaskUtil.sendPatchToBoundState(configTaskState, 
-            oThis.getUri().href, restOperation.getBasicAuthorization());
-    })
-    // Error handling - Set the block as 'ERROR'
-    .catch(function (error) {
-        logger.fine("BASIC: Add Failure: adding/modifying a pool: " + error.message);
-        configTaskUtil.sendPatchToErrorState(configTaskState, error,
-            oThis.getUri().href, restOperation.getBasicAuthorization());
-    })
-    // Always called, no matter the disposition. Also handles re-throwing internal exceptions.
-    .done(function () {
-        logger.fine("BASIC: Add DONE!!!");
-    });
+        .then(function () {
+            logger.fine("BASIC: Add Found a pre-existing pool. Set pool type: " + inputProperties.poolType.value);
+            return icr.setPoolType(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
+        }, function (error) {
+            logger.fine("BASIC: Add GET of pool failed, adding from scratch, including pool-type");
+            return icr.createNewPool(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
+        })
+        .then(function () {
+            // Get existing pool members
+            return icr.getPoolMembers(restOperation, inputProperties.poolName.value);
+        })
+        .then(function (response) {
+            // Delete the existing members (decode from response.body.items list)
+            return icr.deletePoolMembers(restOperation, inputProperties.poolName.value, response.body.items);
+        })
+        .then(function () {
+            // Add all required members
+            return icr.addPoolMembers(restOperation, inputProperties.poolName.value, inputProperties.poolMembers.value);
+        })
+        // Final then() to handle setting the block state to BOUND
+        .then(function () {
+            configTaskUtil.sendPatchToBoundState(configTaskState,
+                oThis.getUri().href, restOperation.getBasicAuthorization());
+        })
+        // Error handling - Set the block as 'ERROR'
+        .catch(function (error) {
+            logger.fine("BASIC: Add Failure: adding/modifying a pool: " + error.message);
+            configTaskUtil.sendPatchToErrorState(configTaskState, error,
+                oThis.getUri().href, restOperation.getBasicAuthorization());
+        })
+        // Always called, no matter the disposition. Also handles re-throwing internal exceptions.
+        .done(function () {
+            logger.fine("BASIC: Add DONE!!!");
+        });
 };
 
 /**
@@ -186,14 +195,14 @@ BasicPoolConfigProcessor.prototype.onDelete = function (restOperation) {
         .then(function () {
             logger.fine("BASIC: delete Found a pre-existing pool. Full Config Delete");
             return icr.deleteExistingPool(restOperation, inputProperties.poolName.value)
-                .then (function (response) {
+                .then(function (response) {
                     logger.fine("BASIC: delete The pool is all removed");
                     configTaskUtil.sendPatchToUnBoundState(configTaskState,
                         oThis.getUri().href, restOperation.getBasicAuthorization());
                 });
         }, function (error) {
             // the configuration must be clean. Nothing to delete
-            configTaskUtil.sendPatchToUnBoundState(configTaskState, 
+            configTaskUtil.sendPatchToUnBoundState(configTaskState,
                 oThis.getUri().href, restOperation.getBasicAuthorization());
         })
         // Error handling - Set the block as 'ERROR'

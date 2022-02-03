@@ -1,20 +1,11 @@
-const NacosNamingClient = require('nacos').NacosNamingClient;
-const logger = console;
 const axios = require('axios')
-
+const Q = require('q')
 const NACOS_HOST = '127.0.0.1:8848' // replace to real nacos serverList
 
-const PAGE_SIZE = 10
-
-const client = new NacosNamingClient({
-  logger,
-  serverList: NACOS_HOST,
-  namespace: 'public',
-  
-});
+const PAGE_SIZE = 1000
 
 const nacosServer = axios.create({
-  baseURL: `http://${NACOS_HOST}/nacos/v1/ns/service/list`,
+  baseURL: `http://${NACOS_HOST}/nacos/v1/ns`,
   timeout: 1000,
 })
 
@@ -22,35 +13,30 @@ const nacosServer = axios.create({
  * get all service name
  * @returns string[]
  */
-async function getAllServiceName() {
-  const serviceNames = []
-  let pageNo = 1
-
-  while (true) {
-    const { doms } =  await nacosServer.get(`/?pageNo=${pageNo}&pageSize=${PAGE_SIZE}`)
-    .then(data => data.data)
-    .catch(() => [])
-
-    serviceNames.push(...doms)
-
-    if (!doms.length < pageSize) break
-    pageNo += 1
-  }
-
-  return serviceNames
+function getAllServiceName() {  
+  return nacosServer.get(`/service/list/?pageNo=${1}&pageSize=${PAGE_SIZE}`)
+  .then(function(data) {
+    return data.data.doms
+  }).catch(() => {
+    return []
+  })
 }
 
 /**
  * get serviceInfo by service name
  * @param {*} serviceName string
- * @returns {Array} { ip: string, port: number }[]
+ * @returns {Array} { ip: string, port: number }
  */
-async function getServiceInfo(serviceName) {
-  if (!serviceName) return {}
+function getServiceInfo(serviceName) {
+  if (!serviceName) return Q({})
 
-  await client.ready();
-  const serviceInfo = await client.getAllInstances(serviceName)
-  return serviceInfo
+  return nacosServer.get(`/instance/list?serviceName=${serviceName}`)
+  .then(function(data) {
+    // 每个serviceName只获取其中一个节点的ip和端口
+    return data.data.hosts[0]
+  }).catch(() => {
+    return {}
+  })
 }
 
 module.exports = {
