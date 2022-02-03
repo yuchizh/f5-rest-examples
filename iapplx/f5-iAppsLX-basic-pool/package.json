@@ -12,7 +12,9 @@
   "author": "iappsdev@f5.com",
   "license": "Apache-2.0",
   "dependencies": {
+    "axios": "^0.25.0",
     "f5-logger": "^1.0.0",
+    "nacos": "^2.2.1",
     "q": "^1.5.1"
   },
   "devDependencies": {
