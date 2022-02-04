@@ -101,11 +101,11 @@ BasicPoolConfigProcessor.prototype.onPost = function (restOperation) {
     // In case user requested configuration to deployed to remote
     // device, setup remote hostname, HTTPS port and device group name
     // to be used for identified requests
-    icr.configureRemoteDeviceRequests(inputProperties, uri).then(function () {
-        return getAllServiceName()
-    }).then(function (serviceNames) {
-        // Start by upserting the pool, by name (insert or verify it exists)
+
+    getAllServiceName().then(function(serviceNames){
         inputProperties.poolName.value = serviceNames[0]
+        return icr.configureRemoteDeviceRequests(inputProperties, uri)
+    }).then(function() {
         return icr.getExistingPool(restOperation, inputProperties.poolName.value);
     })
         .then(function () {
