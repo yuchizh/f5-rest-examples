@@ -16,9 +16,9 @@ const nacosServer = axios.create({
 function getAllServiceName() {  
   return nacosServer.get(`/service/list/?pageNo=${1}&pageSize=${PAGE_SIZE}`)
   .then(function(data) {
-    return data.data.doms
+    return Q(data.data.doms)
   }).catch(() => {
-    return []
+    return Q([])
   })
 }
 
@@ -33,9 +33,9 @@ function getServiceInfo(serviceName) {
   return nacosServer.get(`/instance/list?serviceName=${serviceName}`)
   .then(function(data) {
     // 每个serviceName只获取其中一个节点的ip和端口
-    return data.data.hosts[0]
+    return Q(data.data.hosts[0])
   }).catch(() => {
-    return {}
+    return Q({})
   })
 }
 
