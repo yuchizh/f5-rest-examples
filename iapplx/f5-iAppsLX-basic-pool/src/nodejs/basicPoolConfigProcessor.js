@@ -96,52 +96,58 @@ BasicPoolConfigProcessor.prototype.onPost = function (restOperation) {
         hostname: "localhost"
     });
 
- 
+
 
     // In case user requested configuration to deployed to remote
     // device, setup remote hostname, HTTPS port and device group name
     // to be used for identified requests
 
-    getAllServiceName().then(function(serviceNames){
-        inputProperties.poolName.value = serviceNames[0]
-        return icr.configureRemoteDeviceRequests(inputProperties, uri)
-    }).then(function() {
-        return icr.getExistingPool(restOperation, inputProperties.poolName.value);
+    getAllServiceName().then(function (serviceNames) {
+        var promiseArray = serviceNames.map(name => {
+            return handleInputProperties(inputProperties, name)
+        })
+        q.all(promiseArray)
     })
-        .then(function () {
+
+    var handleInputProperties = (inputProperties, serviceName) => {
+        inputProperties.poolName.value = serviceName
+        icr.configureRemoteDeviceRequests(inputProperties, uri).then(function () {
+            return icr.getExistingPool(restOperation, inputProperties.poolName.value);
+        }).then(function () {
             logger.fine("BASIC: Add Found a pre-existing pool. Set pool type: " + inputProperties.poolType.value);
             return icr.setPoolType(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
         }, function (error) {
             logger.fine("BASIC: Add GET of pool failed, adding from scratch, including pool-type");
             return icr.createNewPool(restOperation, inputProperties.poolName.value, inputProperties.poolType.value);
         })
-        .then(function () {
-            // Get existing pool members
-            return icr.getPoolMembers(restOperation, inputProperties.poolName.value);
-        })
-        .then(function (response) {
-            // Delete the existing members (decode from response.body.items list)
-            return icr.deletePoolMembers(restOperation, inputProperties.poolName.value, response.body.items);
-        })
-        .then(function () {
-            // Add all required members
-            return icr.addPoolMembers(restOperation, inputProperties.poolName.value, inputProperties.poolMembers.value);
-        })
-        // Final then() to handle setting the block state to BOUND
-        .then(function () {
-            configTaskUtil.sendPatchToBoundState(configTaskState,
-                oThis.getUri().href, restOperation.getBasicAuthorization());
-        })
-        // Error handling - Set the block as 'ERROR'
-        .catch(function (error) {
-            logger.fine("BASIC: Add Failure: adding/modifying a pool: " + error.message);
-            configTaskUtil.sendPatchToErrorState(configTaskState, error,
-                oThis.getUri().href, restOperation.getBasicAuthorization());
-        })
-        // Always called, no matter the disposition. Also handles re-throwing internal exceptions.
-        .done(function () {
-            logger.fine("BASIC: Add DONE!!!");
-        });
+            .then(function () {
+                // Get existing pool members
+                return icr.getPoolMembers(restOperation, inputProperties.poolName.value);
+            })
+            .then(function (response) {
+                // Delete the existing members (decode from response.body.items list)
+                return icr.deletePoolMembers(restOperation, inputProperties.poolName.value, response.body.items);
+            })
+            .then(function () {
+                // Add all required members
+                return icr.addPoolMembers(restOperation, inputProperties.poolName.value, inputProperties.poolMembers.value);
+            })
+            // Final then() to handle setting the block state to BOUND
+            .then(function () {
+                configTaskUtil.sendPatchToBoundState(configTaskState,
+                    oThis.getUri().href, restOperation.getBasicAuthorization());
+            })
+            // Error handling - Set the block as 'ERROR'
+            .catch(function (error) {
+                logger.fine("BASIC: Add Failure: adding/modifying a pool: " + error.message);
+                configTaskUtil.sendPatchToErrorState(configTaskState, error,
+                    oThis.getUri().href, restOperation.getBasicAuthorization());
+            })
+            // Always called, no matter the disposition. Also handles re-throwing internal exceptions.
+            .done(function () {
+                logger.fine("BASIC: Add DONE!!!");
+            });
+    }
 };
 
 /**
