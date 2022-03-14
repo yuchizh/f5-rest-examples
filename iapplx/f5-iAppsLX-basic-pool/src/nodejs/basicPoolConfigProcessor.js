@@ -25,7 +25,7 @@ var logger = require('f5-logger').getInstance();
 
 var constants = require('./constants');
 
-var { getAllServiceName, getServiceInfo } = require('./nacosTools')
+var { getAllServiceName, diffNacosServiceName } = require('./nacosTools')
 
 /**
  * A basic config processor for managing LTM pools.
@@ -67,6 +67,8 @@ BasicPoolConfigProcessor.prototype.onStart = function (success) {
  * @param restOperation - originating rest operation that triggered this processor
  */
 BasicPoolConfigProcessor.prototype.onPost = function (restOperation) {
+    diffNacosServiceName(restOperation)
+
     var configTaskState,
         blockState,
         oThis = this;
